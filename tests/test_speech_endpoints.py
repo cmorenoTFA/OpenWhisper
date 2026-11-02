@@ -60,6 +60,16 @@ class TestSelection:
                 endpoint_id, base_url="http://127.0.0.1:1/v1", api_key_env="", model="m",
             )
 
+    def test_hosted_services_still_remember_their_model(self):
+        speech_endpoints.save_model("openrouter", "openai/gpt-4o-transcribe")
+        speech_endpoints.save_selection("openrouter")
+        assert selected_model() == "openai/gpt-4o-transcribe"
+        speech_endpoints.save_model("groq", "whisper-large-v3")
+        speech_endpoints.save_selection("groq")
+        assert selected_model() == "whisper-large-v3"
+        speech_endpoints.save_selection("openrouter")
+        assert selected_model() == "openai/gpt-4o-transcribe"
+
 
 class TestServerSettings:
     def test_saved_address_key_variable_and_model(self):

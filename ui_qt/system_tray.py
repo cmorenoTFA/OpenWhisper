@@ -12,11 +12,34 @@ from ui_qt.utils.app_icon import tray_icon
 logger = logging.getLogger(__name__)
 
 
-def _promote_tray_icon(executable: str) -> bool:
+def tray_host_paths(executable: str, base_executable: str = "") -> set[str]:
+    """Executables Windows may record for this process's tray icon.
+
+    A source install's ``sys.executable`` is the venv shim. Explorer records
+    the real image, ``sys._base_executable``, and the windowed ``pythonw``
+    sibling when the app was launched without a console.
+    """
+    paths: set[str] = set()
+    for raw in (executable, base_executable):
+        if not raw:
+            continue
+        path = os.path.abspath(raw)
+        paths.add(os.path.normcase(path))
+        folder, name = os.path.split(path)
+        stem, ext = os.path.splitext(name)
+        if stem.lower().endswith("python"):
+            sibling = os.path.join(folder, stem + "w" + ext)
+            paths.add(os.path.normcase(os.path.abspath(sibling)))
+    return paths
+
+
+def _promote_tray_icon() -> bool:
     """Set IsPromoted for this process's tray icon. False if Windows has no row yet."""
     import winreg
 
-    target = os.path.normcase(os.path.abspath(executable))
+    targets = tray_host_paths(
+        sys.executable, getattr(sys, "_base_executable", "")
+    )
     try:
         root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\NotifyIconSettings")
     except OSError:
@@ -34,7 +57,7 @@ def _promote_tray_icon(executable: str) -> bool:
             except OSError:
                 winreg.CloseKey(sub)
                 continue
-            if os.path.normcase(path) != target:
+            if os.path.normcase(path) not in targets:
                 winreg.CloseKey(sub)
                 continue
             winreg.SetValueEx(sub, "IsPromoted", 0, winreg.REG_DWORD, 1)
@@ -73,6 +96,8 @@ class SystemTrayManager(QSystemTrayIcon):
         super().__init__()
         self.main_window = main_window
         self._meeting_active = False
+        self._recording = False
+        self._loudness_step = -1
         self._promoted = False
         self._promote_tries = 0
         self.available = bool(QSystemTrayIcon.isSystemTrayAvailable())
@@ -105,7 +130,7 @@ class SystemTrayManager(QSystemTrayIcon):
         if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
             return
         self._promote_tries += 1
-        if not _promote_tray_icon(sys.executable):
+        if not _promote_tray_icon():
             if self._promote_tries < 8:
                 QTimer.singleShot(400, self._ensure_promoted)
             return
@@ -229,13 +254,27 @@ class SystemTrayManager(QSystemTrayIcon):
         self.exit_requested.emit()
 
     def set_recording(self, is_recording: bool):
-        self.setIcon(tray_icon(recording=is_recording))
-        if is_recording:
+        self._recording = bool(is_recording)
+        self._loudness_step = -1
+        self.setIcon(tray_icon(recording=self._recording, loudness=0.0))
+        if self._recording:
             self.toggle_action.setText("Stop Recording")
             self.setToolTip("OpenWhisper — recording")
         else:
             self.toggle_action.setText("Start Recording")
             self.setToolTip("OpenWhisper")
+
+    def hear(self, level: float) -> None:
+        """Brighten the corner dot with microphone loudness while recording."""
+        if not self._recording:
+            return
+        from ui_qt.utils.loudness import level_to_height
+
+        step = int(round(level_to_height(level) * 8))
+        if step == self._loudness_step:
+            return
+        self._loudness_step = step
+        self.setIcon(tray_icon(recording=True, loudness=step / 8))
 
     def set_walkthrough_active(self, active: bool) -> None:
         self.walkthrough_action.setText("Finish Walkthrough" if active else "Start Walkthrough")

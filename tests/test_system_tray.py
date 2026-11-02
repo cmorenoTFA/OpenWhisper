@@ -78,6 +78,20 @@ def test_tray_icon_is_a_circle_and_turns_red_while_recording():
     assert hot.red() > center.red()
     assert tray.toggle_action.text() == "Stop Recording"
 
+    tray.hear(0.2)
+    speaking = tray.icon().pixmap(32).toImage().pixelColor(16, 16)
+    assert speaking.value() > hot.value()
+
+
+def test_source_install_promotes_the_base_pythonw_windows_records():
+    paths = system_tray.tray_host_paths(
+        r"C:\Projects\OpenWhisper\venv\Scripts\pythonw.exe",
+        r"C:\Users\me\anaconda3\python.exe",
+    )
+    assert os.path.normcase(r"C:\Projects\OpenWhisper\venv\Scripts\pythonw.exe") in paths
+    assert os.path.normcase(r"C:\Users\me\anaconda3\pythonw.exe") in paths
+    assert os.path.normcase(r"C:\Users\me\anaconda3\python.exe") in paths
+
 
 class TestOtherPlatformTrayClicks:
     def test_context_menu_stays_attached(self):

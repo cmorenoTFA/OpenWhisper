@@ -280,7 +280,12 @@ def save_selection(endpoint_id: str) -> None:
 
 
 def save_model(endpoint_id: str, model: str) -> None:
-    """Remember ``endpoint_id``'s model; OpenAI's keeps its own setting."""
+    """Remember ``endpoint_id``'s model; OpenAI's keeps its own setting.
+
+    Hosted presets (OpenRouter, Groq) keep a fixed address and key variable,
+    but their model still changes from the picker, so the override is stored
+    even when the endpoint is not otherwise configurable.
+    """
     model = (model or "").strip()
     if not model:
         raise ValueError("Enter a model id.")
@@ -289,7 +294,9 @@ def save_model(endpoint_id: str, model: str) -> None:
             raise ValueError(f"OpenAI has no transcription model {model}.")
         settings_manager.save_setting(SettingsKey.API_TRANSCRIPTION_MODEL, model)
         return
-    _update_server(endpoint_id, {"model": model})
+    if endpoint_id not in _BY_ID:
+        raise ValueError(f"Unknown transcription server: {endpoint_id}")
+    _store_server_fields(endpoint_id, {"model": model})
 
 
 def save_server(endpoint_id: str, *, base_url: str, api_key_env: str, model: str) -> None:
@@ -303,17 +310,15 @@ def save_server(endpoint_id: str, *, base_url: str, api_key_env: str, model: str
     model = (model or "").strip()
     if not model:
         raise ValueError("Enter a model id.")
-    _update_server(endpoint_id, {
+    _store_server_fields(endpoint_id, {
         "base_url": valid_server_url(base_url),
         "api_key_env": validate_api_key_env(api_key_env),
         "model": model,
     })
 
 
-def _update_server(endpoint_id: str, values: Dict[str, str]) -> None:
-    if endpoint_id not in _BY_ID or not _BY_ID[endpoint_id].configurable:
-        raise ValueError(f"{endpoint_id} has no server settings.")
-
+def _store_server_fields(endpoint_id: str, values: Dict[str, str]) -> None:
+    """Merge ``values`` into ``api_transcription_servers[endpoint_id]``."""
     def apply(settings: Dict[str, Any]) -> None:
         servers = settings.get(SettingsKey.API_TRANSCRIPTION_SERVERS)
         servers = dict(servers) if isinstance(servers, dict) else {}

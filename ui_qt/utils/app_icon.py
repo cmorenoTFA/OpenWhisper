@@ -26,7 +26,7 @@ _GRADIENT_START = QColor("#0a84ff")
 _GRADIENT_END = QColor("#64d2ff")
 
 _cached_icon: Optional[QIcon] = None
-_cached_tray_icons: dict[bool, QIcon] = {}
+_cached_tray_icons: dict[tuple, QIcon] = {}
 
 # Idle matches the app accent. Recording swaps to red so the corner dot
 # changes while a dictation is open, the way a status circle should.
@@ -125,32 +125,47 @@ def _draw_mic_simplified(painter: QPainter, size: int) -> None:
     painter.drawArc(cradle, 180 * 16, 180 * 16)
 
 
-def render_tray_pixmap(size: int, *, recording: bool = False) -> QPixmap:
+def _tray_brush(recording: bool, loudness: float) -> QColor:
+    """Idle is the accent blue. Recording is red and brightens with speech."""
+    if not recording:
+        return _TRAY_IDLE
+    loudness = max(0.0, min(1.0, loudness))
+    # Quiet is a deep red; speech lifts value and washes in a little white
+    # so a 16 px tray circle still reads as moving.
+    value = int(150 + 105 * loudness)
+    saturation = int(230 - 90 * loudness)
+    return QColor.fromHsv(4, saturation, value)
+
+
+def render_tray_pixmap(size: int, *, recording: bool = False, loudness: float = 0.0) -> QPixmap:
     """Draw a filled circle for the notification area.
 
     The window and taskbar keep the microphone mark. At tray size that mark
     reads as a rounded square, so the status icon is only the circle.
+    ``loudness`` is 0-1 and only affects the recording color.
     """
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setPen(Qt.PenStyle.NoPen)
-    painter.setBrush(_TRAY_RECORDING if recording else _TRAY_IDLE)
+    painter.setBrush(_tray_brush(recording, loudness))
     painter.drawEllipse(QRectF(0, 0, size, size))
     painter.end()
     return pixmap
 
 
-def tray_icon(*, recording: bool = False) -> QIcon:
-    """Circle shown in the system tray, cached per recording state."""
-    cached = _cached_tray_icons.get(recording)
+def tray_icon(*, recording: bool = False, loudness: float = 0.0) -> QIcon:
+    """Circle shown in the system tray, cached per recording state and loudness step."""
+    step = int(round(max(0.0, min(1.0, loudness)) * 8)) if recording else 0
+    key = (recording, step)
+    cached = _cached_tray_icons.get(key)
     if cached is not None:
         return cached
     icon = QIcon()
     for size in ICON_SIZES:
-        icon.addPixmap(render_tray_pixmap(size, recording=recording))
-    _cached_tray_icons[recording] = icon
+        icon.addPixmap(render_tray_pixmap(size, recording=recording, loudness=step / 8))
+    _cached_tray_icons[key] = icon
     return icon
 
 

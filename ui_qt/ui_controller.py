@@ -719,8 +719,10 @@ class UIController(QObject):
 
     def _apply_audio_levels_to_overlay(self, levels: List[float]):
         self.overlay.update_audio_levels(levels)
-        if self._walkthrough_panel is not None and levels:
-            self._walkthrough_panel.hear(max(levels))
+        if levels:
+            self.tray_manager.hear(max(levels))
+            if self._walkthrough_panel is not None:
+                self._walkthrough_panel.hear(max(levels))
 
     def start_recording(self, profile_id: str = "", *, source: str = "ui"):
         """Request a recording start; UI flips only after the stream opens.
