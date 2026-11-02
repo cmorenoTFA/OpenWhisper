@@ -149,7 +149,7 @@ When a package upgrade or pull replaces the app while it runs, OpenWhisper offer
 ## Get started
 
 1. Open **Settings → Dictation → Voice model** and choose a speech backend. New Windows x64 and Linux x86_64 installs default to Parakeet, and Apple Silicon Macs on macOS 14 or later to Parakeet MLX; other platforms default to Local Whisper. Existing installs keep the engine they use.
-2. Download the model and runtime through **Settings → Models & storage → Downloads**, or add an OpenAI key in **Settings → App → API keys** for cloud transcription.
+2. Download the model and runtime through **Settings → Models & storage → Downloads**, or add an OpenAI, Groq, or OpenRouter key in **Settings → App → API keys** for cloud transcription.
 3. Choose your microphone in **Settings → Dictation → Recording**. On macOS, grant the [required permissions](#macos-permissions).
 4. Use **Quick Record** or the recording hotkey. Stop recording to transcribe; dictation follows your clipboard and auto-paste settings. **Upload File** results stay in the app and have Copy buttons.
 
@@ -189,7 +189,7 @@ Choose **Settings → App → Appearance → Theme → Omarchy desktop** to foll
 | Qwen3-ASR | 0.6B, 1.7B | Windows x64 CPU / NVIDIA GPU; Apple Silicon CPU / Apple GPU (MPS) | Dictation, uploads |
 | Nemotron Streaming | 3.5 ASR Streaming 0.6B | Windows x64 and Linux x86_64 CPU / NVIDIA GPU; Apple Silicon CPU / Apple GPU (Metal); Intel Mac CPU | Dictation with preview, uploads, meetings with native preview |
 | Moonshine | Streaming Small / Medium, English | Windows x64 CPU; Apple Silicon CPU, macOS 15+ | Dictation, uploads, meetings with native preview |
-| API | OpenAI: GPT-Transcribe; GPT-4o Transcribe, GPT-4o Mini Transcribe, and Whisper until OpenAI retires them on February 26, 2027. Groq: Whisper Large v3 / Turbo. Your own server: whatever it serves | OpenAI or Groq in the cloud (API key required), or an OpenAI-compatible speech server you run: Speaches, LocalAI, vLLM, whisper.cpp, or custom | Dictation, uploads |
+| API | OpenAI: GPT-Transcribe; GPT-4o Transcribe, GPT-4o Mini Transcribe, and Whisper until OpenAI retires them on February 26, 2027. Groq: Whisper Large v3 / Turbo. OpenRouter: NVIDIA Nemotron 3.5 Transcribe (`nvidia/nemotron-3.5-transcribe`) by default, plus the other transcription models it lists. Your own server: whatever it serves | OpenAI, Groq, or OpenRouter in the cloud (API key required), or an OpenAI-compatible speech server you run: Speaches, LocalAI, vLLM, whisper.cpp, or custom | Dictation, uploads |
 | Remote computer | Whichever engine the paired computer has selected | Another computer running OpenWhisper on your network | Dictation with that engine's preview, uploads, meetings with a supported host model |
 
 - **Downloads:** Install both the model and its required runtime in **Settings → Models & storage → Downloads**. Each entry shows its size, publisher, license, and download checks.

@@ -11,6 +11,7 @@ import socket
 import select
 import sys
 import threading
+from urllib.parse import urlsplit
 
 
 #: Optional transcription fields, sent only when the request carries them.
@@ -25,8 +26,17 @@ def openai_transcribe(request: dict) -> dict:
     # The parent enforces an absolute deadline as well. Disabling
     # automatic retries avoids duplicate paid requests on cancel.
     # No base_url means OpenAI (or the SDK's OPENAI_BASE_URL).
-    with OpenAI(api_key=request["api_key"], base_url=request.get("base_url"), max_retries=0,
-                timeout=httpx.Timeout(request["read_timeout"], connect=10.)) as client:
+    client_kwargs = {
+        "api_key": request["api_key"],
+        "base_url": request.get("base_url"),
+        "max_retries": 0,
+        "timeout": httpx.Timeout(request["read_timeout"], connect=10.),
+    }
+    host = (urlsplit(request.get("base_url") or "").hostname or "").lower()
+    if host == "openrouter.ai" or host.endswith(".openrouter.ai"):
+        # Same attribution header the text client sends.
+        client_kwargs["default_headers"] = {"X-Title": "OpenWhisper"}
+    with OpenAI(**client_kwargs) as client:
         with open(request["audio_path"], "rb") as audio:
             response = client.audio.transcriptions.create(
                 file=audio, model=request["model"], response_format=request["response_format"],

@@ -50,9 +50,14 @@ HOSTED_TIMEOUT_S = 120.0
 SELF_HOSTED_TIMEOUT_S = 600.0
 
 #: Speaches tags each catalog entry with a task; LocalAI's capabilities
-#: catalog lists what each model can do.
+#: catalog lists what each model can do. OpenRouter marks speech models with
+#: ``architecture.output_modalities`` (checked 2026-11-02).
 _SPEECH_TASK = "automatic-speech-recognition"
 _SPEECH_CAPABILITY = "transcript"
+_TRANSCRIPTION_MODALITY = "transcription"
+#: The default ``/models`` catalog is chat-only. Transcription ids, including
+#: ``nvidia/nemotron-3.5-transcribe``, appear only with this filter.
+_OPENROUTER_MODELS_PATH = "/models?output_modalities=transcription"
 
 
 @dataclass(frozen=True)
@@ -143,6 +148,15 @@ ENDPOINTS: Tuple[SpeechEndpoint, ...] = (
         "whisper-large-v3-turbo", hosted=True, models_path=None,
         known_models=("whisper-large-v3-turbo", "whisper-large-v3"),
         description="Open-weights Whisper models hosted by Groq. Needs a Groq API key.",
+    ),
+    _endpoint(
+        "openrouter", "OpenRouter", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY",
+        "nvidia/nemotron-3.5-transcribe", hosted=True,
+        models_path=_OPENROUTER_MODELS_PATH,
+        description=(
+            "Speech models on OpenRouter. Default is NVIDIA Nemotron 3.5 Transcribe. "
+            "Uses the OpenRouter API key from Settings."
+        ),
     ),
     _endpoint(
         "speaches", "Speaches", "http://127.0.0.1:8000/v1", "",
@@ -338,7 +352,19 @@ def credential_owners(settings: Optional[Mapping[str, Any]] = None) -> List[Tupl
     return owners
 
 
+def _output_modalities(item: Dict[str, Any]) -> Optional[List[Any]]:
+    """Modalities a catalog entry declares, when it declares any."""
+    architecture = item.get("architecture")
+    if isinstance(architecture, dict) and isinstance(architecture.get("output_modalities"), list):
+        return architecture["output_modalities"]
+    modalities = item.get("output_modalities")
+    return modalities if isinstance(modalities, list) else None
+
+
 def _is_speech_model(item: Dict[str, Any]) -> bool:
+    modalities = _output_modalities(item)
+    if modalities is not None:
+        return _TRANSCRIPTION_MODALITY in modalities
     task = item.get("task")
     if task is not None and task != _SPEECH_TASK:
         return False

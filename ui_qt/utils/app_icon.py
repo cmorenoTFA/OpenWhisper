@@ -26,6 +26,12 @@ _GRADIENT_START = QColor("#0a84ff")
 _GRADIENT_END = QColor("#64d2ff")
 
 _cached_icon: Optional[QIcon] = None
+_cached_tray_icons: dict[bool, QIcon] = {}
+
+# Idle matches the app accent. Recording swaps to red so the corner dot
+# changes while a dictation is open, the way a status circle should.
+_TRAY_IDLE = QColor("#0a84ff")
+_TRAY_RECORDING = QColor("#ff453a")
 
 
 def icon_file_path() -> Path:
@@ -117,6 +123,35 @@ def _draw_mic_simplified(painter: QPainter, size: int) -> None:
     painter.setBrush(Qt.BrushStyle.NoBrush)
     cradle = QRectF(size * 0.22, size * 0.28, size * 0.56, size * 0.48)
     painter.drawArc(cradle, 180 * 16, 180 * 16)
+
+
+def render_tray_pixmap(size: int, *, recording: bool = False) -> QPixmap:
+    """Draw a filled circle for the notification area.
+
+    The window and taskbar keep the microphone mark. At tray size that mark
+    reads as a rounded square, so the status icon is only the circle.
+    """
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(_TRAY_RECORDING if recording else _TRAY_IDLE)
+    painter.drawEllipse(QRectF(0, 0, size, size))
+    painter.end()
+    return pixmap
+
+
+def tray_icon(*, recording: bool = False) -> QIcon:
+    """Circle shown in the system tray, cached per recording state."""
+    cached = _cached_tray_icons.get(recording)
+    if cached is not None:
+        return cached
+    icon = QIcon()
+    for size in ICON_SIZES:
+        icon.addPixmap(render_tray_pixmap(size, recording=recording))
+    _cached_tray_icons[recording] = icon
+    return icon
 
 
 def app_icon() -> QIcon:

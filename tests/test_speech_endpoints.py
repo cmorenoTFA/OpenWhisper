@@ -3,6 +3,7 @@ import http.server
 import json
 import threading
 from contextlib import contextmanager
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -52,10 +53,11 @@ class TestSelection:
         with pytest.raises(ValueError):
             speech_endpoints.save_model("openai", "whisper-large-v3")
 
-    def test_hosted_services_have_fixed_addresses(self):
+    @pytest.mark.parametrize("endpoint_id", ["groq", "openrouter"])
+    def test_hosted_services_have_fixed_addresses(self, endpoint_id):
         with pytest.raises(ValueError):
             speech_endpoints.save_server(
-                "groq", base_url="http://127.0.0.1:1/v1", api_key_env="", model="m",
+                endpoint_id, base_url="http://127.0.0.1:1/v1", api_key_env="", model="m",
             )
 
 
@@ -87,6 +89,7 @@ class TestServerSettings:
     @pytest.mark.parametrize("endpoint_id,url,self_hosted", [
         ("openai", None, False),
         ("groq", None, False),
+        ("openrouter", None, False),
         ("speaches", "http://gpu-box:8000/v1", True),
         ("custom", "http://127.0.0.1:9000/v1", True),
         ("custom", "https://speech.example.com/v1", False),
@@ -115,7 +118,7 @@ class TestServerSettings:
         )
         assert speech_endpoints.credential_owners() == [
             ("OPENAI_API_KEY", "OpenAI"), ("GROQ_API_KEY", "Groq"),
-            ("LOCALAI_API_KEY", "LocalAI"),
+            ("OPENROUTER_API_KEY", "OpenRouter"), ("LOCALAI_API_KEY", "LocalAI"),
         ]
 
 
@@ -123,6 +126,9 @@ class TestDestination:
     def test_names_where_audio_goes(self):
         assert speech_endpoints.destination(configured_endpoint("openai")) == "OpenAI (api.openai.com)"
         assert speech_endpoints.destination(configured_endpoint("groq")) == "Groq (api.groq.com)"
+        assert speech_endpoints.destination(configured_endpoint("openrouter")) == (
+            "OpenRouter (openrouter.ai)"
+        )
         local = configured_endpoint("speaches")
         assert local.is_local
         assert speech_endpoints.destination(local) == "your local server at 127.0.0.1:8000"
@@ -151,6 +157,14 @@ class TestRequestFields:
                 "prompt": "Ksenia, Kubernetes.", "language": "de",
             }
             assert response_format(speaches, model) == "json"
+
+    def test_openrouter_keeps_the_language_and_drops_the_dictionary_prompt(self):
+        server = configured_endpoint("openrouter")
+        assert server.base_url == "https://openrouter.ai/api/v1"
+        assert server.default_model == "nvidia/nemotron-3.5-transcribe"
+        assert transcription_hints(server, server.default_model, CONTEXT) == {"language": "de"}
+        assert transcription_hints(server, server.default_model, None) == {}
+        assert response_format(server, server.default_model) == "json"
 
     def test_whisper_cpp_is_asked_to_detect_an_unknown_language(self):
         server = configured_endpoint("whisper_cpp")
@@ -229,6 +243,35 @@ class TestCatalogs:
     def test_groq_offers_its_whisper_models_without_asking(self):
         assert speech_endpoints.list_models(configured_endpoint("groq")) == [
             "whisper-large-v3-turbo", "whisper-large-v3",
+        ]
+
+    def test_openrouter_lists_transcription_models_and_skips_chat_models(self):
+        catalog = {"data": [
+            {"id": "openai/gpt-4o", "architecture": {"output_modalities": ["text"]}},
+            {
+                "id": "openai/whisper-large-v3-turbo",
+                "architecture": {
+                    "modality": "audio->transcription",
+                    "output_modalities": ["transcription"],
+                },
+            },
+            {"id": "openai/whisper-1", "architecture": {"output_modalities": ["transcription"]}},
+            {
+                "id": "nvidia/nemotron-3.5-transcribe",
+                "architecture": {"output_modalities": ["transcription"]},
+            },
+            {"id": "mistralai/voxtral-mini-transcribe", "output_modalities": ["text", "transcription"]},
+        ]}
+        path = "/v1/models?output_modalities=transcription"
+        preset = configured_endpoint("openrouter")
+        with serve({path: (200, catalog)}) as url:
+            endpoint = replace(preset, connection=replace(preset.connection, base_url=url))
+            models = speech_endpoints.list_models(endpoint)
+        assert models == [
+            "mistralai/voxtral-mini-transcribe",
+            "nvidia/nemotron-3.5-transcribe",
+            "openai/whisper-1",
+            "openai/whisper-large-v3-turbo",
         ]
 
     def test_a_server_without_a_catalog_lists_nothing(self):
@@ -318,8 +361,15 @@ def test_worker_sends_to_the_chosen_server(monkeypatch, tmp_path):
                "response_format": "json", "read_timeout": 600.}
     isolated_worker.openai_transcribe({**request, "base_url": "http://127.0.0.1:8000/v1"})
     isolated_worker.openai_transcribe({**request, "base_url": None})
-    assert [c["base_url"] for c in clients] == ["http://127.0.0.1:8000/v1", None]
+    isolated_worker.openai_transcribe({
+        **request, "base_url": "https://openrouter.ai/api/v1",
+    })
+    assert [c["base_url"] for c in clients] == [
+        "http://127.0.0.1:8000/v1", None, "https://openrouter.ai/api/v1",
+    ]
     assert clients[0]["timeout"].read == 600.
+    assert "default_headers" not in clients[0]
+    assert clients[2]["default_headers"] == {"X-Title": "OpenWhisper"}
 
 
 def test_isolated_upload_reaches_a_local_server(tmp_path):

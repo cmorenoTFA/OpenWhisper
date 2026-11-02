@@ -63,6 +63,22 @@ class TestMacStatusItemClicks:
         window.restore_from_tray.assert_not_called()
 
 
+def test_tray_icon_is_a_circle_and_turns_red_while_recording():
+    from ui_qt.utils.app_icon import render_tray_pixmap
+
+    idle = render_tray_pixmap(32).toImage()
+    assert idle.pixelColor(0, 0).alpha() == 0
+    center = idle.pixelColor(16, 16)
+    assert center.alpha() > 200
+    assert center.blue() > center.red()
+
+    tray, _ = _make_tray(click_to_restore=False)
+    tray.set_recording(True)
+    hot = tray.icon().pixmap(32).toImage().pixelColor(16, 16)
+    assert hot.red() > center.red()
+    assert tray.toggle_action.text() == "Stop Recording"
+
+
 class TestOtherPlatformTrayClicks:
     def test_context_menu_stays_attached(self):
         tray, _ = _make_tray(click_to_restore=False)

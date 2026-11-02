@@ -61,7 +61,9 @@ def choose(combo, data):
 def test_openai_is_shown_with_its_models():
     controls = SpeechServerControls()
     assert controls.server_combo.currentData() == "openai"
-    assert items(controls.server_combo)[:7] == list(speech_endpoints.ENDPOINT_IDS)
+    assert items(controls.server_combo)[:len(speech_endpoints.ENDPOINT_IDS)] == list(
+        speech_endpoints.ENDPOINT_IDS
+    )
     assert controls.server_combo.itemText(controls.server_combo.findData("custom")) == "Custom…"
     assert controls.model_combo.currentData() == "gpt-transcribe"
     assert "whisper-1 (retiring" in controls.model_combo.itemText(controls.model_combo.findData("whisper-1"))

@@ -45,6 +45,7 @@ body:
         - Moonshine
         - API engine: OpenAI
         - API engine: Groq
+        - API engine: OpenRouter
         - API engine: Speaches
         - API engine: LocalAI
         - API engine: vLLM

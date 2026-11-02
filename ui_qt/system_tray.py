@@ -1,14 +1,48 @@
 """System tray icon and menu."""
 import logging
+import os
 import sys
 from typing import Optional
 from PyQt6.QtWidgets import QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QAction, QCursor, QGuiApplication
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 
-from ui_qt.utils.app_icon import app_icon
+from ui_qt.utils.app_icon import tray_icon
 
 logger = logging.getLogger(__name__)
+
+
+def _promote_tray_icon(executable: str) -> bool:
+    """Set IsPromoted for this process's tray icon. False if Windows has no row yet."""
+    import winreg
+
+    target = os.path.normcase(os.path.abspath(executable))
+    try:
+        root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\NotifyIconSettings")
+    except OSError:
+        return False
+    try:
+        count = winreg.QueryInfoKey(root)[0]
+        for index in range(count):
+            name = winreg.EnumKey(root, index)
+            try:
+                sub = winreg.OpenKey(root, name, 0, winreg.KEY_READ | winreg.KEY_SET_VALUE)
+            except OSError:
+                continue
+            try:
+                path, _ = winreg.QueryValueEx(sub, "ExecutablePath")
+            except OSError:
+                winreg.CloseKey(sub)
+                continue
+            if os.path.normcase(path) != target:
+                winreg.CloseKey(sub)
+                continue
+            winreg.SetValueEx(sub, "IsPromoted", 0, winreg.REG_DWORD, 1)
+            winreg.CloseKey(sub)
+            return True
+    finally:
+        winreg.CloseKey(root)
+    return False
 
 # macOS status items never report DoubleClick, and an attached context menu
 # swallows the left click to pop itself up. There, a left click restores the
@@ -39,6 +73,8 @@ class SystemTrayManager(QSystemTrayIcon):
         super().__init__()
         self.main_window = main_window
         self._meeting_active = False
+        self._promoted = False
+        self._promote_tries = 0
         self.available = bool(QSystemTrayIcon.isSystemTrayAvailable())
 
         self._setup_icon()
@@ -55,8 +91,29 @@ class SystemTrayManager(QSystemTrayIcon):
             )
 
     def _setup_icon(self):
-        self.setIcon(app_icon())
+        self.setIcon(tray_icon())
         self.setToolTip("OpenWhisper")
+
+    def show(self):
+        super().show()
+        self._ensure_promoted()
+
+    def _ensure_promoted(self) -> None:
+        """Ask Windows 11 to keep the circle in the corner, not the overflow."""
+        if self._promoted or sys.platform != "win32":
+            return
+        if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+            return
+        self._promote_tries += 1
+        if not _promote_tray_icon(sys.executable):
+            if self._promote_tries < 8:
+                QTimer.singleShot(400, self._ensure_promoted)
+            return
+        self._promoted = True
+        # Explorer only moves an icon out of the overflow when it is registered
+        # again after IsPromoted is set.
+        super().hide()
+        super().show()
 
     def _setup_menu(self):
         self.menu = QMenu()
@@ -172,10 +229,13 @@ class SystemTrayManager(QSystemTrayIcon):
         self.exit_requested.emit()
 
     def set_recording(self, is_recording: bool):
+        self.setIcon(tray_icon(recording=is_recording))
         if is_recording:
             self.toggle_action.setText("Stop Recording")
+            self.setToolTip("OpenWhisper — recording")
         else:
             self.toggle_action.setText("Start Recording")
+            self.setToolTip("OpenWhisper")
 
     def set_walkthrough_active(self, active: bool) -> None:
         self.walkthrough_action.setText("Finish Walkthrough" if active else "Start Walkthrough")

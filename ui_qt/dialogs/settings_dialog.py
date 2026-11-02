@@ -3101,9 +3101,9 @@ class SettingsDialog(QDialog):
             )
         elif env_name == JEV_OPENROUTER_ROUTE.credential_env:
             text = (
-                "Used for transcript cleanup and meeting intelligence through "
-                "OpenRouter. It can also run fast judgments (Jev): choose "
-                "OpenRouter under Meeting Mode → Fast judgments."
+                "Used for API transcription, transcript cleanup, and meeting "
+                "intelligence through OpenRouter. It can also run fast judgments "
+                "(Jev): choose OpenRouter under Meeting Mode → Fast judgments."
             )
         elif env_name == TYPESAFE_CREDENTIAL_ENV:
             text = (

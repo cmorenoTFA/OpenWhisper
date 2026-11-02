@@ -39,6 +39,7 @@ The **API** engine uploads each recording to a server that speaks OpenAI's `POST
 | --- | --- | --- | --- |
 | OpenAI | `api.openai.com` | `OPENAI_API_KEY` | OpenAI's transcription models, with their retirement dates |
 | Groq | `https://api.groq.com/openai/v1` | `GROQ_API_KEY` | `whisper-large-v3-turbo` (default) and `whisper-large-v3` |
+| OpenRouter | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` | Transcription models from `GET /models?output_modalities=transcription`. Default is `nvidia/nemotron-3.5-transcribe` |
 | Speaches | `http://127.0.0.1:8000/v1` | none | The speech models the server has downloaded |
 | LocalAI | `http://127.0.0.1:8080/v1` | none | Installed models with the transcript capability |
 | vLLM | `http://127.0.0.1:8000/v1` | none | The models `vllm serve` is running, for example `openai/whisper-large-v3-turbo` |
@@ -47,9 +48,9 @@ The **API** engine uploads each recording to a server that speaks OpenAI's `POST
 
 - **Edit server…** changes a self-hosted preset's or the Custom slot's address, API key variable and model id. An address without a path gets `/v1`; addresses with credentials or query parameters are refused. Speaches and vLLM share port 8000, and LocalAI and whisper.cpp share 8080, so change one when you run both.
 - whisper.cpp's `whisper-server` answers on `/inference` unless it is started with `--inference-path /v1/audio/transcriptions`, so start it with that flag. It assumes English when no language is sent, so OpenWhisper sends `language: auto` when you have not chosen one.
-- Dictionary words go as a `prompt` and the language as `language` to every server except OpenAI's `gpt-transcribe`, which takes `keywords` and `languages`. A request whose hints are rejected (HTTP 400 or 422) is retried once without them.
-- Recordings over 23 MB are split into pieces and uploaded separately, on every server.
-- Each upload waits up to 120 seconds for an answer from a hosted service (OpenAI, Groq, a Custom server elsewhere), and up to 600 seconds from a server you run (any self-hosted preset, or any address on this computer), which may load the model on the first request or run on a CPU. Cancel stops an upload at once.
+- Dictionary words go as a `prompt` and the language as `language` to every server except OpenAI's `gpt-transcribe`, which takes `keywords` and `languages`, and OpenRouter, which takes `language` only. OpenRouter's transcription route has no `prompt` field, and its `keyterms` field is rejected by models that don't support it, including Whisper (checked 2026-11-02). A request whose hints are rejected (HTTP 400 or 422) is retried once without them.
+- Recordings over 23 MB are split into pieces and uploaded separately, on every server. OpenRouter also accepts that OpenAI-style multipart upload. Its own upstream limit is about 60 seconds per request and 25 MB, so a single piece that runs longer than that can fail even though this app waits up to 120 seconds.
+- Each upload waits up to 120 seconds for an answer from a hosted service (OpenAI, Groq, OpenRouter, a Custom server elsewhere), and up to 600 seconds from a server you run (any self-hosted preset, or any address on this computer), which may load the model on the first request or run on a CPU. Cancel stops an upload at once.
 - Audio sent to a server on `localhost` or `127.0.0.1` stays on this computer; anything else is uploaded to that host. The Server field and **Settings → App → API keys** name the destination and which key goes where.
 
 Meeting speaker identification is separate: on-device labels (WeSpeaker) are the default, and the optional cloud pass always uses OpenAI's diarization model with the OpenAI key, whichever server dictation uses.

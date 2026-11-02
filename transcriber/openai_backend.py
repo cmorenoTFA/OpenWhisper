@@ -42,8 +42,12 @@ def transcription_hints(endpoint: SpeechEndpoint, api_model: str, recognition) -
         if language:
             hints["languages"] = [language]
     else:
+        # OpenRouter's transcription route has no ``prompt`` field (checked
+        # 2026-11-02). ``keyterms`` is rejected by models that don't support
+        # it, including Whisper, so a dictionary hint is left off rather than
+        # failing the request and dropping ``language`` with it.
         prompt = vocabulary_prompt(phrases)
-        if prompt:
+        if prompt and endpoint.id != "openrouter":
             hints["prompt"] = prompt
         language = language or endpoint.auto_language
         if language:
